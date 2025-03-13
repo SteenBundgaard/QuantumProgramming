@@ -12,51 +12,40 @@ namespace Quantum.Shor {
 
     @EntryPoint()
     operation RunModularExponentiation() : Unit {
-        let n = 7;
-        let nBits = BitSizeI(24);
-        use (x, y, result, modulo) = (Qubit[nBits], Qubit[nBits], Qubit[nBits], Qubit[nBits]);    // for RSA the number of bits are 4096 in result
-        InitializeQubitsFromInteger(18, x);
-        InitializeQubitsFromInteger(1, y);
-        DumpRegister(x);       
-        let xResult = MeasureInt(x);
-        Message($"x {xResult}");
-    //    H(x[0]);
-    H(y[0]);
-    H(y[1]);
-        H(y[2]);
-        DumpMachine();
-        // let yResult = MeasureInt(y);
-        // Message($"y {yResult}");
-        // DumpMachine(); 
-        // QuantumAdder(x, y, result);
-        // DumpMachine(); 
-        // QuantumAdder(result, y, result2);
-        // DumpMachine();          
-        // QuantumAdder(x, y, result);
-        // DumpMachine(); 
-        //  QuantumMultiplier(x, y , result);
-        //  DumpRegister(result);
-        //  QuantumMultiplier(x, y , result);
-        //  DumpRegister(result);
-        QuantumDivider(x, y, result, modulo);
-      //  QuantumSubtractor(x, y, result);
-      //  DumpRegister(result);
-        // QuantumSubtractor(x, y, result);
-        // DumpRegister(result);
+        let N = 7;
+        mutable a = 3;
+        let nBits = BitSizeI(7);
+        use (x, result, divisor) = (Qubit[nBits], Qubit[nBits], Qubit[nBits]);    // for RSA the number of bits are 4096 in result
+        InitializeQubitsFromInteger(2, x);
+        InitializeQubitsFromInteger(N, divisor);
+        InitializeQubitsFromInteger(1, result);
+
+        // set X in superposition of all possible exponents
+      //  ApplyToEach(H, x);
         
-    //   QuantumDivider(y, x, result);
-        // let postAddYResult = MeasureInt(y);
-        // Message($"resulty {postAddYResult}");
-        DumpMachine();
-       // DumpRegister(result);
-        let integerResult = MeasureInt(result);
-        Message($"result {integerResult}");
-         let integerModulo = MeasureInt(modulo);
-        Message($"modulo {integerModulo}");
-       // DumpMachine();
-        ResetAll(x);
-        ResetAll(y);
-        ResetAll(result);
+        use baseValue = Qubit[BitSizeI(a)];
+        use tempMultResult = Qubit[nBits * 2];
+        use tempDivisionResult = Qubit[nBits * 2];
+        use tempRemainder = Qubit[nBits];
+        for i in 0..Length(x) - 1 {        
+            InitializeQubitsFromInteger(a, baseValue);            
+            within {
+                X(x[i]);         
+                for j in 0..Length(baseValue) - 1 {      
+                    if a % 2 == 1 {
+                        CNOT(x[i], baseValue[j]);
+                    }
+                }                
+                CNOT(x[i], baseValue[0]);                
+            }
+            apply {
+                QuantumMultiplier(result, baseValue, tempMultResult);
+                QuantumDivider(tempMultResult, divisor, tempDivisionResult, tempRemainder);
+                QuantumMultiplier(result, baseValue, tempMultResult);
+            }                        
+            a = a ^ 2 % N;
+            ResetAll(baseValue);
+        }
     }
 
     operation InitializeQubitsFromInteger(n : Int, qubits : Qubit[]) : Unit {
@@ -220,11 +209,11 @@ namespace Quantum.Shor {
         ResetAll(tempOutputRegister);
     }
 
-    operation QuantumDivider(dividendRegister: Qubit[], divisorRegister: Qubit[], outputRegister: Qubit[], moduloRegister: Qubit[]) : Unit {
+    operation QuantumDivider(dividendRegister: Qubit[], divisorRegister: Qubit[], outputRegister: Qubit[], remainderRegister: Qubit[]) : Unit {
         let divisorLength = Length(divisorRegister);
         let ancillaLength = divisorLength + 1;
         use (ancillaQubits, ancillaQubits2, ancillaQubits3, ancillaQubits4, ancillaQubits5) = (Qubit[ancillaLength], Qubit[ancillaLength], Qubit[1], Qubit[ancillaLength], Qubit[ancillaLength]);
-        use tempModuloRegister = Qubit[(divisorLength + 1) * 2];
+        use tempRemainderRegister = Qubit[(divisorLength + 1) * 2];
         let extendedDivisor = divisorRegister + ancillaQubits3;
        
         for j in 0..Length(dividendRegister) - 1 {
@@ -234,26 +223,26 @@ namespace Quantum.Shor {
             let tempModuloIndex = (j % 2) * (divisorLength + 1);
             let prevTempModuloIndex = ((j -1) % 2) * (divisorLength + 1);
             if (j > 0) {
-                workingDividend = workingDividend + tempModuloRegister[prevTempModuloIndex..prevTempModuloIndex + divisorLength-1];
+                workingDividend = workingDividend + tempRemainderRegister[prevTempModuloIndex..prevTempModuloIndex + divisorLength-1];
             } else {
                 workingDividend =  workingDividend + ancillaQubits[0..divisorLength-1];
             }
-            QuantumSubtractor(workingDividend, extendedDivisor, tempModuloRegister[tempModuloIndex..tempModuloIndex + divisorLength]); 
+            QuantumSubtractor(workingDividend, extendedDivisor, tempRemainderRegister[tempModuloIndex..tempModuloIndex + divisorLength]); 
          
             // substract-multiplex
-            CNOT(tempModuloRegister[tempModuloIndex + divisorLength], outputRegister[index]);
-            Controlled Adjoint QuantumSubtractorAdjCtl([outputRegister[index]], (workingDividend, extendedDivisor, tempModuloRegister[tempModuloIndex..tempModuloIndex + divisorLength], ancillaQubits2));
-            Controlled QuantumAdderAdjCtl([outputRegister[index]], (workingDividend, ancillaQubits2, tempModuloRegister[tempModuloIndex..tempModuloIndex + divisorLength], ancillaQubits4));
+            CNOT(tempRemainderRegister[tempModuloIndex + divisorLength], outputRegister[index]);
+            Controlled Adjoint QuantumSubtractorAdjCtl([outputRegister[index]], (workingDividend, extendedDivisor, tempRemainderRegister[tempModuloIndex..tempModuloIndex + divisorLength], ancillaQubits2));
+            Controlled QuantumAdderAdjCtl([outputRegister[index]], (workingDividend, ancillaQubits2, tempRemainderRegister[tempModuloIndex..tempModuloIndex + divisorLength], ancillaQubits4));
             X(outputRegister[index]); 
             // uncompute
             if (j > 0) {
                 // recreate working dividend
-                Controlled QuantumAdderAdjCtl([outputRegister[index]], (tempModuloRegister[tempModuloIndex..tempModuloIndex + divisorLength], extendedDivisor, ancillaQubits5, ancillaQubits4));  
+                Controlled QuantumAdderAdjCtl([outputRegister[index]], (tempRemainderRegister[tempModuloIndex..tempModuloIndex + divisorLength], extendedDivisor, ancillaQubits5, ancillaQubits4));  
                 within{
                     X(outputRegister[index]); 
                 } 
                 apply {
-                    Controlled QuantumAdderAdjCtl([outputRegister[index]], (tempModuloRegister[tempModuloIndex..tempModuloIndex + divisorLength], ancillaQubits2, ancillaQubits5, ancillaQubits4));                  
+                    Controlled QuantumAdderAdjCtl([outputRegister[index]], (tempRemainderRegister[tempModuloIndex..tempModuloIndex + divisorLength], ancillaQubits2, ancillaQubits5, ancillaQubits4));                  
                 }
                 // recreate prev modulo
                 CNOT(dividendRegister[index], ancillaQubits5[0]);
@@ -269,9 +258,9 @@ namespace Quantum.Shor {
                 apply
                 {
                     // actual uncompute                
-                    Controlled QuantumAdderAdjCtl([outputRegister[index+1]], (ancillaQubits, ancillaQubits2, tempModuloRegister[prevTempModuloIndex..prevTempModuloIndex + divisorLength], ancillaQubits4));
-                    Controlled Adjoint QuantumSubtractorAdjCtl([outputRegister[index+1]], (ancillaQubits, extendedDivisor, tempModuloRegister[prevTempModuloIndex..prevTempModuloIndex + divisorLength], ancillaQubits4));                            
-                    QuantumSubtractor(ancillaQubits, extendedDivisor, tempModuloRegister[prevTempModuloIndex..prevTempModuloIndex + divisorLength]); 
+                    Controlled QuantumAdderAdjCtl([outputRegister[index+1]], (ancillaQubits, ancillaQubits2, tempRemainderRegister[prevTempModuloIndex..prevTempModuloIndex + divisorLength], ancillaQubits4));
+                    Controlled Adjoint QuantumSubtractorAdjCtl([outputRegister[index+1]], (ancillaQubits, extendedDivisor, tempRemainderRegister[prevTempModuloIndex..prevTempModuloIndex + divisorLength], ancillaQubits4));                            
+                    QuantumSubtractor(ancillaQubits, extendedDivisor, tempRemainderRegister[prevTempModuloIndex..prevTempModuloIndex + divisorLength]); 
                 }
                 // release ancillas
                 Controlled QuantumAdderAdjCtl([outputRegister[index+1]], (prevModulo, extendedDivisor, ancillaQubits, ancillaQubits2));
@@ -280,20 +269,20 @@ namespace Quantum.Shor {
                     X(outputRegister[index]); 
                 } 
                 apply {
-                    Controlled QuantumAdderAdjCtl([outputRegister[index]], (tempModuloRegister[tempModuloIndex..tempModuloIndex + divisorLength], ancillaQubits2, ancillaQubits5, ancillaQubits4));                  
+                    Controlled QuantumAdderAdjCtl([outputRegister[index]], (tempRemainderRegister[tempModuloIndex..tempModuloIndex + divisorLength], ancillaQubits2, ancillaQubits5, ancillaQubits4));                  
                 }
-                Controlled QuantumAdderAdjCtl([outputRegister[index]], (tempModuloRegister[tempModuloIndex..tempModuloIndex + divisorLength], extendedDivisor, ancillaQubits5, ancillaQubits4));  
+                Controlled QuantumAdderAdjCtl([outputRegister[index]], (tempRemainderRegister[tempModuloIndex..tempModuloIndex + divisorLength], extendedDivisor, ancillaQubits5, ancillaQubits4));  
             }
         }
         let tempModuloIndex = ((Length(dividendRegister) - 1) % 2) * (divisorLength + 1);
-        for i in 0..Length(moduloRegister) - 1 {
-            SWAP(moduloRegister[i], tempModuloRegister[i + tempModuloIndex]);
+        for i in 0..Length(remainderRegister) - 1 {
+            SWAP(remainderRegister[i], tempRemainderRegister[i + tempModuloIndex]);
         }
         ResetAll(ancillaQubits);
         ResetAll(ancillaQubits2); 
         ResetAll(ancillaQubits3);   
         ResetAll(ancillaQubits4); 
         ResetAll(ancillaQubits5);
-        ResetAll(tempModuloRegister);  
+        ResetAll(tempRemainderRegister);  
     }
   }
