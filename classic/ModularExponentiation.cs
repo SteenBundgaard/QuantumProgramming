@@ -1,25 +1,27 @@
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+//using Microsoft.VisualStudio.TestTools.UnitTesting;
+using RsaTest;
+
+var cd = 11 * 59 % (6 * 12);
+var encoded = Run.ModularExponentiation3(9, 11, 7 * 13);
+var encoded2 = Run.ModularExponentiation2(9, 11, 7 * 13);
+var encoded3 = Run.ModularExponentiation3(9, 11, 7 * 13);
+var a = 42;            
 
 namespace RsaTest
 {
-    [TestClass]
+  //  [TestClass]
     public class Run
     {
-        [TestMethod]
+//     [TestMethod]
         public void TestNumberTheory()
         {
             var cd = 11 * 59 % (6 * 12);
-            var encoded = ModularExponentiation(9, 11, 7 * 13);
+            var encoded = ModularExponentiation2(9, 11, 7 * 13);
             var decoded = ModularExponentiation(encoded, 59, 7 * 13);  
         }
 
         // Funktion til modulær eksponentiation
-        static int ModularExponentiation(int baseValue, int exponent, int modulus)
+        public static int ModularExponentiation(int baseValue, int exponent, int modulus)
         {
             int result = 1;
             baseValue = baseValue % modulus; // Reducer basen mod modulus
@@ -35,6 +37,69 @@ namespace RsaTest
                 // Eksponent halveres, og baseValue kvadreres
                 exponent = exponent >> 1;
                 baseValue = (baseValue * baseValue) % modulus;
+            }
+
+            return result;
+        }
+
+        public static int ModularExponentiation2(int baseValue, int exponent, int modulus)
+        {
+            int result = 1;
+            baseValue = baseValue % modulus; // Reducer basen mod modulus
+
+            while (exponent > 0)
+            {
+                // Hvis eksponenten er ulige, multiplicér med resultatet
+                if ((exponent & 1) == 1)
+                {
+                    int tmp = 0;
+                    for (var i = 0; i < result; i++)
+                    {
+                        tmp += baseValue;
+                        tmp = tmp % modulus;
+                    };
+                    result = tmp;
+                }
+
+                // Eksponent halveres, og baseValue kvadreres
+                exponent = exponent >> 1;
+                baseValue = baseValue * baseValue % modulus;
+            }
+
+            return result;
+        }
+
+        public static int ModularExponentiation3(int baseValue, int exponent, int modulus)
+        {
+            int result = 1;
+            baseValue = baseValue % modulus; // Reducer basen mod modulus
+
+            while (exponent > 0)
+            {
+                // Hvis eksponenten er ulige, multiplicér med resultatet
+                if ((exponent & 1) == 1)
+                {
+                    int tmp = 0;
+                    int counter = 1;
+                    for (var i = 0; i < System.Math.Log2(result) + 1; i++)
+                    {
+                        if ((result & Convert.ToInt32(System.Math.Pow(2, i))) == 1)
+                        {
+                            for (var j = 0; j < counter; j++)
+                            {
+                                tmp += baseValue;
+                                tmp = tmp % modulus;
+                            }
+                            counter = counter * counter;
+                        }
+                    }
+                    ;
+                    result = tmp;
+                }
+
+                // Eksponent halveres, og baseValue kvadreres
+                exponent = exponent >> 1;
+                baseValue = baseValue * baseValue % modulus;
             }
 
             return result;
