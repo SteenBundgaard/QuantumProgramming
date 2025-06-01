@@ -2,7 +2,7 @@
 using RsaTest;
 
 var cd = 11 * 59 % (6 * 12);
-var encoded = Run.ModularExponentiation3(9, 11, 7 * 13);
+var encoded = Run.ModularExponentiation(9, 11, 7 * 13);
 var encoded2 = Run.ModularExponentiation2(9, 11, 7 * 13);
 var encoded3 = Run.ModularExponentiation3(9, 11, 7 * 13);
 var a = 42;            
@@ -80,20 +80,17 @@ namespace RsaTest
                 if ((exponent & 1) == 1)
                 {
                     int tmp = 0;
-                    int counter = 1;
                     for (var i = 0; i < System.Math.Log2(result) + 1; i++)
                     {
                         if ((result & Convert.ToInt32(System.Math.Pow(2, i))) == 1)
                         {
-                            for (var j = 0; j < counter; j++)
+                            for (var j = 0; j < Math.Pow(2,i); j++)
                             {
                                 tmp += baseValue;
                                 tmp = tmp % modulus;
                             }
-                            counter = counter * counter;
-                        }
-                    }
-                    ;
+                        }                        
+                    }                    
                     result = tmp;
                 }
 

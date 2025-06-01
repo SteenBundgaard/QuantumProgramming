@@ -22,41 +22,69 @@ namespace Quantum.ShorNew {
         use baseValue = Qubit[nBits * 2];
         use tempResult = Qubit[2*Length(result)];
         use ancilla = Qubit[Length(baseValue)];
+        use ancilla2 = Qubit[Length(baseValue)];
+        use ancilla3 = Qubit[Length(baseValue)];
 
         InitializeQubitsFromInteger(3, x);
         InitializeQubitsFromInteger(N, divisor);
-        InitializeQubitsFromInteger(1, result);
+        InitializeQubitsFromInteger(3, result);
    
-        for i in 0..Length(x) - 1 {    
-            let tempIndex = (i % 2) * resultLength;
-            let prevTempIndex = ((i + 1) % 2) * resultLength;
-            let divisonRemainderIndex = (i % 2) * nBits;
-            let prevDivisonRemainderIndex = ((i + 1) % 2) * nBits;
-
+        for v in 0..Length(x) - 1 {                
             InitializeQubitsFromInteger(a, baseValue);                        
             within {
-                X(x[i]);         
+                X(x[v]);         
                 for j in 0..Length(baseValue) - 1 {      
                     if ((a &&& (1 <<< j)) != 0) {
-                        CNOT(x[i], baseValue[j]);
+                        CNOT(x[v], baseValue[j]);
                     }
                 }                
-            }
-            apply {
-                mutable counter = 1;
-                for i in 0..Length(result) - 1 {
-                    for k in 0..counter - 1 {
-                        Controlled QuantumAdder([result[i]], (baseValue, tempResult[prevTempIndex..prevTempIndex+Length(result)-1], tempResult[tempIndex..tempIndex+Length(result)-1], ancilla));
-                        QuantumSubtractor(tempResult[tempIndex..tempIndex+Length(result)-1], divisor, result, ancilla);
-                    }
+            }                 
+            apply {          
+                for i in 0..Length(result) - 1 {       
+                    for k in 0..(1 <<< i) - 1 {
+                        let tempIndex = ((k + i) % 2) * resultLength;
+                        let prevTempIndex = ((k + i + 1) % 2) * resultLength;
+
+                        within {
+                            // t1 = a0 + baseValue
+                            Controlled QuantumAdder([result[i]], (baseValue, tempResult[prevTempIndex..prevTempIndex+Length(result)-1], remainder, ancilla));                                       
+                            // t2 = t1 - divisor
+                            Controlled QuantumSubtractor([result[i]], (remainder, divisor, ancilla2, ancilla));                                                                                                          
+                        }
+                        apply {
+                            X(ancilla2[Length(result)-1]);
+                            // a1 = t1 - divisor ? t1 >= divisor  
+                            Controlled QuantumSubtractor([result[i], ancilla2[Length(result)-1]], (remainder, divisor, tempResult[tempIndex..tempIndex+Length(result)-1], ancilla));
+                            X(ancilla2[Length(result)-1]);
+                            // a1 = t1 ? t1 < divisor  
+                            for t in 0..Length(remainder) - 1 {
+                                CCNOT(ancilla2[Length(result)-1], remainder[t], tempResult[tempIndex + t]);
+                            } 
+                        }                                         
+                        if (k + i) > 0 {
+                            within {
+                                Controlled QuantumAdder([result[i]], (baseValue, divisor, remainder, ancilla));
+                                Controlled QuantumAdder([result[i]], (tempResult[tempIndex..tempIndex + Length(result)-1], divisor, ancilla2, ancilla));
+                                Controlled QuantumSubtractor([result[i]], (ancilla2, remainder, ancilla3, ancilla));
+                            } apply {
+                                DumpRegister(tempResult[prevTempIndex..prevTempIndex + Length(result)-1]);
+                                Controlled QuantumSubtractor([result[i], ancilla3[Length(result)-1]], (ancilla2, baseValue, tempResult[prevTempIndex..prevTempIndex + Length(result)-1], ancilla));
+                                DumpRegister(tempResult[prevTempIndex..prevTempIndex + Length(result)-1]);
+                                X(ancilla3[Length(result)-1]);
+                                Controlled QuantumSubtractor([result[i], ancilla3[Length(result)-1]], (tempResult[tempIndex..tempIndex + Length(result)-1], baseValue, tempResult[prevTempIndex..prevTempIndex + Length(result)-1], ancilla));
+                                X(ancilla3[Length(result)-1]);
+                                DumpRegister(tempResult[prevTempIndex..prevTempIndex + Length(result)-1]);
+                            }
+                        }
+                    } 
                 }
-                // QuantumMultiplier(tempRemainder[prevDivisonRemainderIndex..prevDivisonRemainderIndex + nBits -1], baseValue, tempMultResult);                
-                // QuantumDivider(tempMultResult, divisor, tempDivisionResult[divisonResultIndex..divisonResultIndex + resultLength -1], tempRemainder[divisonRemainderIndex..divisonRemainderIndex+nBits-1]);
-                // DumpRegister(tempRemainder);
-                // QuantumMultiplier(tempRemainder[prevDivisonRemainderIndex..prevDivisonRemainderIndex + nBits -1], baseValue, tempMultResult);
+                DumpRegister(ancilla2);
+                DumpRegister(ancilla3);
+                DumpRegister(remainder);     
+                          DumpRegister(tempResult);  
             }
                                   
-            a = a ^ 2 % N;
+            a = (a * a) % N;
             ResetAll(baseValue);
         }
     }
