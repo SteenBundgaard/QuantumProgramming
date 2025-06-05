@@ -27,7 +27,7 @@ namespace Quantum.ShorNew {
 
         InitializeQubitsFromInteger(3, x);
         InitializeQubitsFromInteger(N, divisor);
-        InitializeQubitsFromInteger(3, result);
+        InitializeQubitsFromInteger(1, result);
    
         for v in 0..Length(x) - 1 {                
             InitializeQubitsFromInteger(a, baseValue);                        
@@ -60,20 +60,18 @@ namespace Quantum.ShorNew {
                             for t in 0..Length(remainder) - 1 {
                                 CCNOT(ancilla2[Length(result)-1], remainder[t], tempResult[tempIndex + t]);
                             } 
-                        }                                         
+                        }            
+                        // uncompute step                             
                         if (k + i) > 0 {
                             within {
                                 Controlled QuantumAdder([result[i]], (baseValue, divisor, remainder, ancilla));
                                 Controlled QuantumAdder([result[i]], (tempResult[tempIndex..tempIndex + Length(result)-1], divisor, ancilla2, ancilla));
                                 Controlled QuantumSubtractor([result[i]], (ancilla2, remainder, ancilla3, ancilla));
-                            } apply {
-                                DumpRegister(tempResult[prevTempIndex..prevTempIndex + Length(result)-1]);
-                                Controlled QuantumSubtractor([result[i], ancilla3[Length(result)-1]], (ancilla2, baseValue, tempResult[prevTempIndex..prevTempIndex + Length(result)-1], ancilla));
-                                DumpRegister(tempResult[prevTempIndex..prevTempIndex + Length(result)-1]);
+                            } apply {                                
+                                Controlled QuantumSubtractor([result[i], ancilla3[Length(result)-1]], (ancilla2, baseValue, tempResult[prevTempIndex..prevTempIndex + Length(result)-1], ancilla));                                
                                 X(ancilla3[Length(result)-1]);
                                 Controlled QuantumSubtractor([result[i], ancilla3[Length(result)-1]], (tempResult[tempIndex..tempIndex + Length(result)-1], baseValue, tempResult[prevTempIndex..prevTempIndex + Length(result)-1], ancilla));
-                                X(ancilla3[Length(result)-1]);
-                                DumpRegister(tempResult[prevTempIndex..prevTempIndex + Length(result)-1]);
+                                X(ancilla3[Length(result)-1]);  
                             }
                         }
                     } 
