@@ -1,4 +1,5 @@
 namespace Quantum.ShorNew {
+    import Std.Arithmetic.ApplyIfGreaterOrEqualL;
     import Std.Math.TimesCP;
     import Std.Math.AbsI;
     import Std.Math.BitSizeI;
@@ -15,23 +16,24 @@ namespace Quantum.ShorNew {
     operation RunModularExponentiation() : Unit {
         let N = 7;
         mutable a = 3;
-        let nBits = BitSizeI(7);
+        let nBits = BitSizeI(N);
         let registerLength = nBits * 2;
-        use (x, result, divisor) = (Qubit[registerLength], Qubit[registerLength], Qubit[registerLength]);    // for RSA the number of bits are 4096 in result
-        use remainder = Qubit[registerLength];
+        use (x, result, divisor) = (Qubit[registerLength], Qubit[registerLength], Qubit[registerLength]);    // for RSA the number of bits are registerLength= 4096
         use baseValue = Qubit[registerLength];
         use tempResult = Qubit[2 * registerLength];
         use ancilla = Qubit[registerLength];
         use ancilla2 = Qubit[registerLength];
         use ancilla3 = Qubit[registerLength];
-
+        use ancilla4 = Qubit[registerLength];
+        
         mutable knownBit = 0; 
         mutable tempIndex = 0;
         mutable prevTempIndex = registerLength;     
         while knownBit < Length(divisor) - 1 and a &&& (1 <<< knownBit) == 0 {
             knownBit += 1;
         }
-        InitializeQubitsFromInteger(3, x);
+        InitializeQubitsFromInteger(1, x);
+        ApplyToEach(H, x[0..1]);
         InitializeQubitsFromInteger(1, result);
 
         for v in 0..Length(x) - 1 {
@@ -51,25 +53,25 @@ namespace Quantum.ShorNew {
                         prevTempIndex = (prevTempIndex / registerLength + 1) % 2 * registerLength;            
                         within {
                             // t1 = a0 + baseValue
-                            QuantumAdder(baseValue, tempResult[prevTempIndex..prevTempIndex + registerLength-1], remainder, ancilla);
+                            QuantumAdder(baseValue, tempResult[prevTempIndex..prevTempIndex + registerLength-1], ancilla4, ancilla);
                             // t2 = t1 - divisor
-                            QuantumSubtractor(remainder, divisor, ancilla2, ancilla);
+                            QuantumSubtractor(ancilla4, divisor, ancilla2, ancilla);
                         } apply {
                             X(ancilla2[registerLength-1]);
                             // a1 = t1 - divisor ? t1 >= divisor
-                            Controlled QuantumSubtractor([ancilla2[registerLength-1]], (remainder, divisor, tempResult[tempIndex..tempIndex + registerLength-1], ancilla));
+                            Controlled QuantumSubtractor([ancilla2[registerLength-1]], (ancilla4, divisor, tempResult[tempIndex..tempIndex + registerLength-1], ancilla));
                             X(ancilla2[registerLength-1]);
                             // a1 = t1 ? t1 < divisor
-                            for t in 0..Length(remainder) - 1 {
-                                CCNOT(ancilla2[registerLength-1], remainder[t], tempResult[tempIndex + t]);
+                            for t in 0..Length(ancilla4) - 1 {
+                                CCNOT(ancilla2[registerLength-1], ancilla4[t], tempResult[tempIndex + t]);
                             }
                         }
                         // uncompute step
                         if (k + i) > 0 {
                             within {
-                                QuantumAdder(baseValue, divisor, remainder, ancilla);
+                                QuantumAdder(baseValue, divisor, ancilla4, ancilla);
                                 QuantumAdder(tempResult[tempIndex..tempIndex + registerLength-1], divisor, ancilla2, ancilla);
-                                QuantumSubtractor(ancilla2, remainder, ancilla3, ancilla);
+                                QuantumSubtractor(ancilla2, ancilla4, ancilla3, ancilla);
                             } apply {
                                 Controlled QuantumSubtractor([ancilla3[registerLength-1]], (ancilla2, baseValue, tempResult[prevTempIndex..prevTempIndex + registerLength-1], ancilla));
                                 X(ancilla3[registerLength-1]);
@@ -80,22 +82,28 @@ namespace Quantum.ShorNew {
                 //         DumpRegister(ancilla2);
                 // DumpRegister(ancilla3);
                 // DumpRegister(remainder);
-                Message("Base Value: ");
-                DumpRegister(baseValue);
-                Message("Divisor: ");
-                DumpRegister(divisor);
+                // Message("Base Value: ");
+           //     DumpRegister(baseValue);
+                // Message("Divisor: ");
+           //     DumpRegister(divisor);
                 // DumpRegister(tempResult);  
                 //  DumpRegister(ancilla2);
                     }
-                    CNOT(divisor[knownBit], result[i]);
-                    ResetAll(baseValue);                   
-                    ResetAll(divisor);  
-                }
+                    // Message("Divisor: ");
+                    // DumpRegister(divisor);
+                    // Message("Result: ");
+                    // DumpRegister(result[i..i]);
+                    CNOT(divisor[knownBit], result[i]);   // will cause divisor and basevalue not to be able to uncompute
+                }                
+                DumpMachine();
+                Reset(ancilla[0]);
+                DumpMachine();
                 // DumpRegister(ancilla2);
                 // DumpRegister(ancilla3);
                 // DumpRegister(remainder);
                 // DumpRegister(tempResult);                                     
             }
+            Message("after x[v]");
             DumpRegister(result);
             DumpRegister(tempResult);
             for i in 0..registerLength - 1 {
@@ -108,6 +116,13 @@ namespace Quantum.ShorNew {
             DumpRegister(tempResult);
             a = (a * a) % N;
         }
+        DumpMachine();
+        let modularExponentiationResult = MeasureInt(result);
+        Message($"Final Result: modularExponentiationResult = {modularExponentiationResult}");
+        ResetAll(x);
+        ResetAll(result);
+        ResetAll(divisor);
+        ResetAll(baseValue);        
     }
 
     operation InitializeQubitsFromInteger(n : Int, qubits : Qubit[]) : Unit {
