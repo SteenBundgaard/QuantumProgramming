@@ -3,6 +3,9 @@
 .vscode/
 .idea/
 
+# Solution file
+quantum.sln
+
 # Build output
 obj/
 bin/
