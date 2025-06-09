@@ -25,95 +25,22 @@ namespace Quantum.ShorNew {
         use ancilla2 = Qubit[registerLength];
         use ancilla3 = Qubit[registerLength];
         use ancilla4 = Qubit[registerLength];
-        
-        mutable knownBit = 0; 
-        mutable tempIndex = 0;
-        mutable prevTempIndex = registerLength;     
-        while knownBit < Length(divisor) - 1 and a &&& (1 <<< knownBit) == 0 {
-            knownBit += 1;
-        }
-        InitializeQubitsFromInteger(1, x);
-        ApplyToEach(H, x[0..1]);
+
+        ApplyToEach(H, x);
         InitializeQubitsFromInteger(1, result);
 
         for v in 0..Length(x) - 1 {
+            Controlled QuantumMultiplierModuloN([x[v]], (a, N, registerLength, baseValue, divisor, result, tempResult, ancilla, ancilla2, ancilla3, ancilla4));
+            // swap result and tempResult
+            let lastIndex = ((2 <<< (registerLength - 1)) - 1 + ((1 <<< (registerLength - 1)) - 1)) % 2 * registerLength;
             for i in 0..registerLength - 1 {
-                within {
-                    for j in 0..Length(baseValue) - 1 {      
-                        if ((a &&& (1 <<< j)) != 0) {
-                            CCNOT(x[v], result[i], baseValue[j]);
-                        }
-                        if ((N &&& (1 <<< j)) != 0) {
-                            CCNOT(x[v], result[i], divisor[j]);
-                        }                   
-                    }                         
-                } apply {
-                    for k in 0..(1 <<< i) - 1 {                      
-                        tempIndex = (tempIndex / registerLength + 1) % 2 * registerLength;
-                        prevTempIndex = (prevTempIndex / registerLength + 1) % 2 * registerLength;            
-                        within {
-                            // t1 = a0 + baseValue
-                            QuantumAdder(baseValue, tempResult[prevTempIndex..prevTempIndex + registerLength-1], ancilla4, ancilla);
-                            // t2 = t1 - divisor
-                            QuantumSubtractor(ancilla4, divisor, ancilla2, ancilla);
-                        } apply {
-                            X(ancilla2[registerLength-1]);
-                            // a1 = t1 - divisor ? t1 >= divisor
-                            Controlled QuantumSubtractor([ancilla2[registerLength-1]], (ancilla4, divisor, tempResult[tempIndex..tempIndex + registerLength-1], ancilla));
-                            X(ancilla2[registerLength-1]);
-                            // a1 = t1 ? t1 < divisor
-                            for t in 0..Length(ancilla4) - 1 {
-                                CCNOT(ancilla2[registerLength-1], ancilla4[t], tempResult[tempIndex + t]);
-                            }
-                        }
-                        // uncompute step
-                        if (k + i) > 0 {
-                            within {
-                                QuantumAdder(baseValue, divisor, ancilla4, ancilla);
-                                QuantumAdder(tempResult[tempIndex..tempIndex + registerLength-1], divisor, ancilla2, ancilla);
-                                QuantumSubtractor(ancilla2, ancilla4, ancilla3, ancilla);
-                            } apply {
-                                Controlled QuantumSubtractor([ancilla3[registerLength-1]], (ancilla2, baseValue, tempResult[prevTempIndex..prevTempIndex + registerLength-1], ancilla));
-                                X(ancilla3[registerLength-1]);
-                                Controlled QuantumSubtractor([ancilla3[registerLength-1]], (tempResult[tempIndex..tempIndex + registerLength-1], baseValue, tempResult[prevTempIndex..prevTempIndex + registerLength-1], ancilla));
-                                X(ancilla3[registerLength-1]);
-                            }
-                        }
-                //         DumpRegister(ancilla2);
-                // DumpRegister(ancilla3);
-                // DumpRegister(remainder);
-                // Message("Base Value: ");
-           //     DumpRegister(baseValue);
-                // Message("Divisor: ");
-           //     DumpRegister(divisor);
-                // DumpRegister(tempResult);  
-                //  DumpRegister(ancilla2);
-                    }
-                    // Message("Divisor: ");
-                    // DumpRegister(divisor);
-                    // Message("Result: ");
-                    // DumpRegister(result[i..i]);
-                    CNOT(divisor[knownBit], result[i]);   // will cause divisor and basevalue not to be able to uncompute
-                }                
-                DumpMachine();
-                Reset(ancilla[0]);
-                DumpMachine();
-                // DumpRegister(ancilla2);
-                // DumpRegister(ancilla3);
-                // DumpRegister(remainder);
-                // DumpRegister(tempResult);                                     
+                CCNOT(x[v], tempResult[lastIndex + i], result[i]);
+                CCNOT(x[v], result[i], tempResult[lastIndex + i]);
+                CCNOT(x[v], tempResult[lastIndex + i], result[i]);
             }
-            Message("after x[v]");
-            DumpRegister(result);
-            DumpRegister(tempResult);
-            for i in 0..registerLength - 1 {
-                CCNOT(x[v], tempResult[tempIndex + i], result[i]);
-                CCNOT(x[v], result[i], tempResult[tempIndex + i]);
-                CCNOT(x[v], tempResult[tempIndex + i], result[i]);
-                //SWAP(tempResult[tempIndex + i], result[i]);
-            }
-            DumpRegister(result);
-            DumpRegister(tempResult);
+            // uncompute tempresult
+            let modInverse = ModInverse(a, N);
+            Controlled Adjoint QuantumMultiplierModuloN([x[v]], (modInverse, N, registerLength, baseValue, divisor, result, tempResult, ancilla, ancilla2, ancilla3, ancilla4));
             a = (a * a) % N;
         }
         DumpMachine();
@@ -122,7 +49,36 @@ namespace Quantum.ShorNew {
         ResetAll(x);
         ResetAll(result);
         ResetAll(divisor);
-        ResetAll(baseValue);        
+        ResetAll(baseValue);
+    }
+
+    function ModInverse(a : Int, n : Int) : Int {
+        mutable t = 0;
+        mutable newt = 1;
+        mutable r = n;
+        mutable newr = a;
+
+        while newr != 0 {
+            let quotient = r / newr;
+
+            let tempt = t;
+            t = newt;
+            newt = tempt - quotient * newt;
+
+            let tempr = r;
+            r = newr;
+            newr = tempr - quotient * newr;
+        }
+
+        if r > 1 {
+            fail "Modulær invers eksisterer ikke";
+        }
+
+        if t < 0 {
+            t += n;
+        }
+
+        return t;
     }
 
     operation InitializeQubitsFromInteger(n : Int, qubits : Qubit[]) : Unit {
@@ -150,6 +106,55 @@ namespace Quantum.ShorNew {
         mutable result = ResultArrayAsInt(bits);
         //  result = result - (if M(qubits[nBits - 1]) == One { 1 } else {0} ) * 2^(nBits-1);
         return result;
+    }
+
+
+    operation QuantumMultiplierModuloN(a : Int, N : Int, registerLength : Int, baseValue : Qubit[], divisor : Qubit[], result : Qubit[], tempResult : Qubit[], ancilla : Qubit[], ancilla2 : Qubit[], ancilla3 : Qubit[], ancilla4 : Qubit[]) : Unit is Adj + Ctl {
+        for i in 0..registerLength - 1 {
+            within {
+                for j in 0..Length(baseValue) - 1 {
+                    if ((a &&& (1 <<< j)) != 0) {
+                        CNOT(result[i], baseValue[j]);
+                    }
+                    if ((N &&& (1 <<< j)) != 0) {
+                        CNOT(result[i], divisor[j]);
+                    }
+                }
+            } apply {
+                for k in 0..(1 <<< i) - 1 {
+                    let tempIndex = i > 0 ? ((2 <<< i) - 1 + k) % 2 * registerLength | 0;
+                    let prevTempIndex = i > 0 ? ((2 <<< i) + k) % 2 * registerLength | registerLength;                    
+                    within {
+                        // t1 = a0 + baseValue
+                        QuantumAdder(baseValue, tempResult[prevTempIndex..prevTempIndex + registerLength-1], ancilla4, ancilla);
+                        // t2 = t1 - divisor
+                        QuantumSubtractor(ancilla4, divisor, ancilla2, ancilla);
+                    } apply {
+                        X(ancilla2[registerLength-1]);
+                        // a1 = t1 - divisor ? t1 >= divisor
+                        Controlled QuantumSubtractor([ancilla2[registerLength-1]], (ancilla4, divisor, tempResult[tempIndex..tempIndex + registerLength-1], ancilla));
+                        X(ancilla2[registerLength-1]);
+                        // a1 = t1 ? t1 < divisor
+                        for t in 0..Length(ancilla4) - 1 {
+                            CCNOT(ancilla2[registerLength-1], ancilla4[t], tempResult[tempIndex + t]);
+                        }
+                    }
+                    // uncompute step
+                    if (k + i) > 0 {
+                        within {
+                            QuantumAdder(baseValue, divisor, ancilla4, ancilla);
+                            QuantumAdder(tempResult[tempIndex..tempIndex + registerLength-1], divisor, ancilla2, ancilla);
+                            QuantumSubtractor(ancilla2, ancilla4, ancilla3, ancilla);
+                        } apply {
+                            Controlled QuantumSubtractor([ancilla3[registerLength-1]], (ancilla2, baseValue, tempResult[prevTempIndex..prevTempIndex + registerLength-1], ancilla));
+                            X(ancilla3[registerLength-1]);
+                            Controlled QuantumSubtractor([ancilla3[registerLength-1]], (tempResult[tempIndex..tempIndex + registerLength-1], baseValue, tempResult[prevTempIndex..prevTempIndex + registerLength-1], ancilla));
+                            X(ancilla3[registerLength-1]);
+                        }
+                    }
+                }
+            }
+        }
     }
 
     // Calculates X + Y and stores the value in outputregister
