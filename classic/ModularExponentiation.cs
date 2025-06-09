@@ -2,7 +2,7 @@
 using RsaTest;
 
 var cd = 11 * 59 % (6 * 12);
-var test = Run.ModularExponentiation4(3, 1, 7);
+var test = Run.ModularExponentiation(3, 123, 7);
 var encoded = Run.ModularExponentiation(12, 44, 7 * 12);
 //var encoded2 = Run.ModularExponentiation2(9, 11, 7 * 13);
 var encoded2 = Run.ModularExponentiation2(12, 44, 7 * 12);
