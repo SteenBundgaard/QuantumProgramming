@@ -11,14 +11,33 @@ namespace Quantum.Shor {
     import Microsoft.Quantum.Math.*;
     import Microsoft.Quantum.Arrays.*;
     import Microsoft.Quantum.Convert.*;
+    import Quantum.Shared.*;
 
-    @EntryPoint()
+   // @EntryPoint()
     operation RunModularExponentiation() : Unit {
         let N = 7;
-        mutable a = 3;
+        let aInitial = 3;
+        let nBits = BitSizeI(N);
+        let registerLength = nBits + 1; // an extra bit is required for the arithemetic operations
+        use (x, result) = (Qubit[registerLength * 2], Qubit[registerLength]); // for RSA the number of bits are registerLength= 4096
+        // prepare with all possible values of x
+        ApplyToEach(H, x);        
+        // Calculates a^X mod N
+        QuantumExponentiationModuloN(N, aInitial, result, x);
+        // measure
+        let modularExponentiationResult = MeasureInt(result);
+        let xMeasure = MeasureInt(x);
+        Message($"Final Result: x = {xMeasure} ; modularExponentiationResult = {modularExponentiationResult}");
+        // release       
+        ResetAll(result);  
+        ResetAll(x);
+    }
+
+    operation QuantumExponentiationModuloN(N : Int, aInitial : Int, result : Qubit[], x : Qubit[]) : Unit {      
         let nBits = BitSizeI(N);
         let registerLength = nBits + 1;
-        use (x, result, divisor) = (Qubit[registerLength * 2], Qubit[registerLength], Qubit[registerLength]);    // for RSA the number of bits are registerLength= 4096
+        mutable a = aInitial;
+        use divisor = Qubit[registerLength];  // all qubit registers in the operation are 'ancillas' but used differently
         use baseValue = Qubit[registerLength];
         use tempResult = Qubit[2 * registerLength];
         use ancilla = Qubit[registerLength];
@@ -26,7 +45,6 @@ namespace Quantum.Shor {
         use ancilla3 = Qubit[registerLength];
         use ancilla4 = Qubit[registerLength];
 
-        ApplyToEach(H, x);
         InitializeQubitsFromInteger(1, result);
 
         for v in 0..Length(x) - 1 {
@@ -43,13 +61,6 @@ namespace Quantum.Shor {
             Controlled Adjoint QuantumMultiplierModuloN([x[v]], (modInverse, N, registerLength, baseValue, divisor, result, tempResult, ancilla, ancilla2, ancilla3, ancilla4));
             a = (a * a) % N;
         }
-        let modularExponentiationResult = MeasureInt(result);
-        let xMeasure = MeasureInt(x);
-        Message($"Final Result: x = {xMeasure} ; modularExponentiationResult = {modularExponentiationResult}");
-        ResetAll(x);
-        ResetAll(result);
-        ResetAll(divisor);
-        ResetAll(baseValue);
     }
 
     function ModInverse(a : Int, n : Int) : Int {
@@ -80,34 +91,6 @@ namespace Quantum.Shor {
 
         return t;
     }
-
-    operation InitializeQubitsFromInteger(n : Int, qubits : Qubit[]) : Unit {
-        ResetAll(qubits);
-        let nBits = Length(qubits);
-        mutable temp = n;
-        // if (n < 0){
-        //     X(qubits[nBits-1]);
-        //     temp = 2^(nBits-1) + temp;
-        // }
-        for i in 0..Length(qubits) - 1 {
-            if temp % 2 == 1 {
-                X(qubits[i]);
-            }
-            temp = temp >>> 1;
-        }
-    }
-
-    operation MeasureInt(qubits : Qubit[]) : Int {
-        mutable bits = [];
-        let nBits = Length(qubits);
-        for idxBit in 0..nBits - 1 {
-            set bits += [M(qubits[idxBit])];
-        }
-        mutable result = ResultArrayAsInt(bits);
-        //  result = result - (if M(qubits[nBits - 1]) == One { 1 } else {0} ) * 2^(nBits-1);
-        return result;
-    }
-
 
     operation QuantumMultiplierModuloN(a : Int, N : Int, registerLength : Int, baseValue : Qubit[], divisor : Qubit[], result : Qubit[], tempResult : Qubit[], ancilla : Qubit[], ancilla2 : Qubit[], ancilla3 : Qubit[], ancilla4 : Qubit[]) : Unit is Adj + Ctl {
         for i in 0..registerLength - 1 {
