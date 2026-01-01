@@ -5,7 +5,7 @@
     import Microsoft.Quantum.Math.*;
     import Microsoft.Quantum.Arrays.*;
 
-    operation QFT(input : Qubit[]) : Unit {
+    operation QFT(input : Qubit[]) : Unit is Adj + Ctl {
       for i in Length(input) - 1..-1..0 {
         H(input[i]);
         for j in i-1..-1..0 {

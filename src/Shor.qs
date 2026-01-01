@@ -44,7 +44,7 @@ namespace Quantum.Shor {
             return ();
         }
         // Classical post-processing
-        let fractions = ContinousFractions(amplitude, 1 <<< (2 * registerLength));
+        let fractions = ContinuedFractions(amplitude, 1 <<< (2 * registerLength));
         let partialSums = CalculatePartialSums(fractions);
         // find period
         let period = FindPeriodFromPartialSums(partialSums, N, baseInitial);
@@ -66,19 +66,19 @@ namespace Quantum.Shor {
         Message($"Congratulations. The factors are {factor1} and {factor2}. Check N = {factor1 * factor2} = {N}");            
     }
 
-    function ContinousFractions(numerator : Int, denominator : Int) : Int[] {
-        mutable cofficients = [];
+    function ContinuedFractions(numerator : Int, denominator : Int) : Int[] {
+        mutable coefficients = [];
         mutable tempNumerator = numerator;
         mutable tempDenominator = denominator;
         while (tempDenominator != 0) {  // will terminate for rational numbers
-            let cofficient = Floor(IntAsDouble(tempNumerator) / IntAsDouble(tempDenominator));
-            set cofficients += [cofficient];
-            tempNumerator -= cofficient * tempDenominator;
+            let coefficient = Floor(IntAsDouble(tempNumerator) / IntAsDouble(tempDenominator));
+            set coefficients += [coefficient];
+            tempNumerator -= coefficient * tempDenominator;
             let temp = tempDenominator;
             tempDenominator = tempNumerator;
             tempNumerator = temp;
         }
-        return cofficients;
+        return coefficients;
     }
 
     function CalculatePartialSums(fractions : Int[]) : (Int, Int)[] {
