@@ -18,7 +18,7 @@ namespace Quantum.Shor {
 
     @EntryPoint()
     operation RunShor() : Unit {
-        let N = 15;
+        let N = 29;
         let baseInitial = GenerateRandomBase(N);
         Message($"Random base = {baseInitial}");
         let nBits = BitSizeI(N);
@@ -49,6 +49,10 @@ namespace Quantum.Shor {
         // find period
         let period = FindPeriodFromPartialSums(partialSums, N, baseInitial);
         Message($"Period = {period}");
+        if period == 0 {
+            Message($"Bad luck - Measurement did not reveal period.");
+            return ();
+        }
         if period % 2 != 0 {
             Message($"Bad luck - Period is odd, try again.");
             return ();
