@@ -18,7 +18,7 @@ namespace Quantum.Shor {
 
     @EntryPoint()
     operation RunShor() : Unit {
-        let N = 29;
+        let N = 55;
         let baseInitial = GenerateRandomBase(N);
         Message($"Random base = {baseInitial}");
         let nBits = BitSizeI(N);
@@ -142,7 +142,7 @@ namespace Quantum.Shor {
 
     operation GenerateRandomBase(N : Int) : Int {
         mutable random = 0;
-        while (random == 0 or GreatestCommonDivisor(N, random) != 1) {
+        while (random <= 1 or GreatestCommonDivisor(N, random) != 1) {
             random = GenerateRandomNumberInRange(N - 1);
         }
         return random;
